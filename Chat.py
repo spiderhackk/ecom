@@ -1,4 +1,6 @@
 from flask import Flask, render_template, request, url_for, redirect, session, flash, jsonify
+from werkzeug.security import generate_password_hash, check_password_hash
+import uuid
 from pymongo import MongoClient
 from datetime import datetime
 client = MongoClient('localhost', 27017)
@@ -6,44 +8,34 @@ db = client.shilajit
 app = Flask(__name__)
 app.secret_key = 'rs'
 
-
-@app.route('/', methods=['POST', 'GET'])
-def login():
-    return render_template('index.html')
-
-
-@app.route('/register', methods=['POST', "GET"])
-def register():
-    return render_template('sign.html')
-
-
-@app.route('/logedin', methods=['POST', 'GET'])
+@app.route('/login', methods=['POST', 'GET'])
 def logedin():
     if request.method == 'POST':
-        email = request.form.get('email')
+        login_data_req= request.get_json()
+        email=login_data_req["email"]
         session['email'] = email
-        psw = request.form.get('psw')
-        name = db.user.find({'email': email, 'psw': psw})
-
+        psw=login_data_req["psw"]
+        name = db.user.find({'email': email,"psw":psw})
         if name.count() == 1:
-            flash("Login succesfully")
-            return jsonify()
+            return jsonify({"message":"Login successfully"}),200
         else:
-            return  flash("Username or Password is incorrect")
+            return jsonify({"message":"username or password is incorrect"}),403
+
 
 
 @app.route('/signup', methods=['POST', "GET"])
 def signup():
-    email = request.form.get('email')
+    user_data=request.get_json()
+    email=user_data["email"]
     sand = db.user.find({'email': email})
     if sand.count() > 0:
-        return redirect(url_for('register'))
-    psw = request.form.get('psw')
-    num = request.form.get('num')
-    name = request.form.get('username')
-    gender = request.form.get('gender')
+        return jsonify(err="Email already exsit"),403
+    psw =user_data['psw']
+    num = user_data['num']
+    name = user_data['username']
+    gender =user_data['gender']
     db.user.insert_one({'email': email, 'psw': psw, 'num': num, 'username': name, 'gender': gender, "add": []})
-    return redirect(url_for('home'))
+    return jsonify({"message":"user created successfully"}),200
 
 
 @app.route('/home', methods=['POST', 'GET'])
@@ -58,11 +50,11 @@ def home():
 @app.route('/category', methods=['POST', 'GET'])
 def catogory_handler():
     if 'email' in session:
-        get_category = (db.category.find())
+        get_category = (db.category.find({},{"_id":0}))
         list_category = []
         for i in get_category:
             list_category.append(i)
-        return str(list_category)
+        return jsonify(list_category)
     else:
         return redirect(url_for('login'))
 
@@ -71,10 +63,10 @@ def catogory_handler():
 def subcategory_handler():
     if 'email' in session:
         list_subcategory = []
-        get_subcategory = (db.subcategory.find())
+        get_subcategory = (db.subcategory.find({},{"_id":0}))
         for j in get_subcategory:
             list_subcategory.append(j)
-        return str(list_subcategory)
+        return jsonify(list_subcategory)
     else:
         return redirect(url_for('login'))
 
@@ -83,12 +75,11 @@ def subcategory_handler():
 def products_handler():
     if 'email' in session:
         list_products = []
-        get_products = (db.products.find())
+        get_products = (db.products.find({},{"_id":0}))
         for k in get_products:
             list_products.append(k)
-        return str(list_products)
-    else:
-        return redirect(url_for('login'))
+        return jsonify(list_products)
+    return jsonify({"message":"please login "})
 
 
 @app.route('/checkout/address')
