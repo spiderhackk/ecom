@@ -15,9 +15,13 @@ def logedin():
         email=login_data_req["email"]
         session['email'] = email
         psw=login_data_req["psw"]
+        data_req=db.user.find({"email":email},{"_id":0,"name":1,"email":1,"gender":1,"username":1,"num":1})
+        user_data_list=[]
+        for i in data_req:
+            user_data_list.append(i)
         name = db.user.find({'email': email,"psw":psw})
         if name.count() == 1:
-            return jsonify({"message":"Login successfully"}),200
+            return jsonify({"message":"Login successfully"},user_data_list),200
         else:
             return jsonify({"message":"username or password is incorrect"}),403
 
@@ -35,6 +39,7 @@ def signup():
     name = user_data['username']
     gender =user_data['gender']
     db.user.insert_one({'email': email, 'psw': psw, 'num': num, 'username': name, 'gender': gender, "add": []})
+    db.orderhistory.insert_one({"email":email})
     return jsonify({"message":"user created successfully"}),200
 
 
@@ -92,12 +97,10 @@ def checkout_address():
             userdata_list.append(i)
         return jsonify(userdata_list)
     else:
-        return redirect(url_for('login'))
+        return jsonify({"message":"Please login"})
 
 
-@app.route('/addressnew')
-def new_address():
-    return render_template('check.html')
+
 
 
 @app.route('/address', methods=['POST', 'GET'])
@@ -121,7 +124,7 @@ def add_addres():
                     db.user.update({"_id": get_id}, {"$push": {"add":{"addressType": AddType, "firstname": name,"email": mail,"add": address, "city": city,
                                                                    "zip": pincode, "state": state, }}})
                 else:
-                   return "Home Type Already Exist"
+                   return jsonify({"message":"Home type address already exist"})
 
 
 
@@ -132,14 +135,14 @@ def add_addres():
                         "add": {"addressType1": AddType, "firstname": name, "email": mail, "add": address, "city": city,
                                 "zip": pincode, "state": state, }}})
                 else:
-                    return " Office Type Address Already Exist"
+                    return jsonify({"message":"Office type address already exist"})
 
 
             if AddType == "other":
                 db.user.update({"_id": get_id}, {"$push": {"add": [
                     {"addressType2": AddType, "firstname": name, "email": mail, "add": address, "city": city,
                      "zip": pincode, "state": state, }]}})
-        return redirect(url_for('checkout_address'))
+    return redirect(url_for('checkout_address'))
 
 
 @app.route('/editAddress',methods=['POST','GET'])
@@ -182,28 +185,38 @@ def Order_summary():
             products_list.append(i)
         return jsonify(products_list)
     else:
-       return redirect(url_for('login'))
+        return jsonify({"message":"please login"})
 
 @app.route('/paynow',methods=["POST","GET"])
 def Order_placed():
-    if "email" in session:
-        db.orderid.update({"d_id":"1" },{ "$inc": { "OrderId":1, "InvoiceId": 1 } })
-        get_data=db.orderid.find({},{"_id":0,"OrderId":1})
-        data_found = []
-        current_datetime = datetime.now()
-        for j in get_data:
-            data_found.append(j)
-        return jsonify(data_found,current_datetime)
-    else:
-        return redirect(url_for('login'))
-
-
+    #if "email" in session:
+    #email=session["email"]
+    data=request.get_json()
+    products_id =data["ProductsId"]
+    emailId=data["email"]
+    get_products_details = db.products.find({"ProductsId": products_id},
+                                            {"_id": 0, "ProductsName": 1, "ProductsPrice": 1,
+                                             "ProductsDescription": 1, "ProductsId": 1})
+    item_list = []
+    for i in get_products_details:
+        item_list.append(i)
+    current_datetime = datetime.now()
+    db.orderid.update({"d_id":"1"},{ "$inc": { "OrderId":1, "InvoiceId": 1}})
+    get_data=db.orderid.find({},{"_id":0,"OrderId":1})
+    data_found ="OR"
+    for j in get_data:
+        data_found+=str(j["OrderId"])
+    db.orderhistory.update({"email":emailId},{"$push":{"OrderDetails":{"email":emailId,"orderid":data_found,"TimeOfPlaceTheOrder":current_datetime,"productsDetails":i}}})
+    return jsonify(data_found,current_datetime,item_list)
 @app.route('/myorderhistory',methods=["POST","GET"])
 def my_order_history():
-    return "hi"
-
-
-
+    user_id=request.get_json()
+    data_name=user_id["email"]
+    get_data=db.orderhistory.find({"email":data_name},{"_id":0})
+    data_return=[]
+    for i in get_data:
+        data_return.append(i)
+    return jsonify(data_return)
 
 
 @app.route('/logout')
