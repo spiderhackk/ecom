@@ -283,6 +283,26 @@ def remove_item_cart():
     else:
         return jsonify("please login")
 
+@app.route('/search',methods=["POST"])
+def search_item():
+    if "email" in session:
+        data=request.get_json()
+        user_req=data["context"]
+        item=db.products.find({"ProductsName":{"$regex":user_req,"$options":"$ix"}},{"_id":0})
+        item_list=[]
+        i=0
+        for i in item:
+            item_list.append(i)
+        if i==0:
+            return jsonify(err= "item not found")
+
+        else:
+            return jsonify(item_list)
+    else:
+        return jsonify("login please")
+
+
+
 
 @app.route('/logout')
 def logout():
