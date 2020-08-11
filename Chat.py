@@ -190,6 +190,7 @@ def Order_placed():
                                                 {"_id": 0, "ProductsName": 1, "ProductsPrice": 1,
                                                  "ProductsDescription": 1, "ProductsId": 1})
         item_list = []
+
         for i in get_products_details:
             item_list.append(i)
         current_datetime = datetime.now()
@@ -202,10 +203,10 @@ def Order_placed():
                                                                        {"orderid": data_found,
                                                                         "TimeOfPlaceTheOrder": current_datetime,
                                                                         "orderStatus": "pending",
-                                                                        "productsDetails": i}}})
+                                                                        "productsDetails": i}}}, upsert=True)
         return jsonify(data_found, current_datetime, item_list)
     else:
-        return jsonify({"message": "login please"})
+        return jsonify("login please")
 
 
 @app.route('/myorderhistory', methods=["POST", "GET"])
@@ -229,7 +230,7 @@ def cancel_order():
         email = session["email"]
         data = request.get_json()
         data_order_id = data["orderid"]
-        data_details = db.orderhistory.update(
+        db.orderhistory.update(
             {"OrderDetails.orderid": data_order_id, "email": email},
             {"$set": {"OrderDetails.$.orderStatus": "cancel"}})
         return jsonify("Order has been cancel")
@@ -283,25 +284,24 @@ def remove_item_cart():
     else:
         return jsonify("please login")
 
-@app.route('/search',methods=["POST"])
+
+@app.route('/search', methods=["POST"])
 def search_item():
     if "email" in session:
-        data=request.get_json()
-        user_req=data["context"]
-        item=db.products.find({"ProductsName":{"$regex":user_req,"$options":"$ix"}},{"_id":0})
-        item_list=[]
-        i=0
+        data = request.get_json()
+        user_req = data["context"]
+        item = db.products.find({"ProductsName": {"$regex": user_req, "$options": "$ix"}}, {"_id": 0})
+        item_list = []
+        i = 0
         for i in item:
             item_list.append(i)
-        if i==0:
-            return jsonify(err= "item not found")
+        if i == 0:
+            return jsonify(err="item not found")
 
         else:
             return jsonify(item_list)
     else:
         return jsonify("login please")
-
-
 
 
 @app.route('/logout')
@@ -310,19 +310,24 @@ def logout():
     return jsonify({"message": "logout"})
 
 
-@app.route('/forgotPassword', methods=['POST', 'GET'])
+@app.route('/forgot/password', methods=['POST', 'GET'])
 def forgotpass():
-    return render_template('product.html')
+    data = request.get_json()
+    email = data["email"]
+    fpass = data["psw"]
+    db.user.update({"email": email}, {"$set": {"psw": fpass}})
+    return jsonify({"message": "password has successfully updated"})
 
 
 @app.route('/reset', methods=['POST', 'GET'])
 def reset():
-    email = request.form.get('email')
+    data = request.get_json()
+    email = data['email']
     get_data = db.user.find({'email': email})
     if get_data.count() > 0:
-        return render_template('password.html')
+        return jsonify({"message": "successfully updated"})
     else:
-        return "Username Does not exsit"
+        return jsonify({"message": "Username Does not exist"})
 
 
 if __name__ == '__main__':
