@@ -101,7 +101,7 @@ def subcategory_handler():
 @app.route('/products', methods=['POST', 'GET'])
 def products_handler():
     list_products = []
-    get_products = (db.products.find({}, {"_id": 0}))
+    get_products = db.products.find({}, {"_id": 0})
     for k in get_products:
         list_products.append(k)
     return jsonify(list_products)
@@ -124,7 +124,7 @@ def add_addres(user):
         email=user
         data_for_address = request.get_json()
         name = data_for_address['firstname']
-        address = data_for_address['add']
+        address = data_for_address['street']
         city = data_for_address['city']
         state = data_for_address['state']
         pincode = data_for_address['zip']
@@ -134,11 +134,11 @@ def add_addres(user):
         user_db = db.user.find({"email": email})
         for i in user_db:
             get_id = i["_id"]
-            if AddType == "Home":
+            if AddType == "home":
                 data_found_home = db.user.find({"add.addressType": "Home"})
                 if data_found_home.count() == 0:
                     db.user.update({"_id": get_id}, {"$push": {
-                        "add": {"addressType": AddType, "firstname": name, "email": mail, "add": address, "city": city,
+                        "add": {"addressType": AddType, "firstname": name, "email": mail, "street": address, "city": city,
                                 "zip": pincode, "state": state, }}})
                 else:
                     return jsonify({"message": "Home type address already exist"})
@@ -147,24 +147,24 @@ def add_addres(user):
                 data_found_office = db.user.find({"add.addressType1": "office"})
                 if data_found_office.count() == 0:
                     db.user.update({"_id": get_id}, {"$push": {
-                        "add": {"addressType1": AddType, "firstname": name, "email": mail, "add": address, "city": city,
+                        "add": {"addressType1": AddType, "firstname": name, "email": mail, "street": address, "city": city,
                                 "zip": pincode, "state": state, }}})
                 else:
                     return jsonify({"message": "Office type address already exist"})
 
             if AddType == "other":
-                db.user.update({"_id": get_id}, {"$push": {"add": [
-                    {"addressType2": AddType, "firstname": name, "email": mail, "add": address, "city": city,
-                     "zip": pincode, "state": state, }]}})
+                db.user.update({"_id": get_id}, {"$push": {"add":
+                    {"addressType2": AddType, "firstname": name, "email": mail, "street": address, "city": city,
+                     "zip": pincode, "state": state, }}})
         return jsonify({"message": "address added"})
 
 
 @app.route('/editAddress', methods=['POST', 'GET'])
-def edit_address():
-    if "email" in session:
-        email = session['email']
+@check_auth
+def edit_address(user):
+        email = user
         name = request.form.get('firstname')
-        address = request.form.get('add')
+        address = request.form.get('street')
         city = request.form.get('city')
         state = request.form.get('state')
         pincode = request.form.get('zip')
@@ -185,7 +185,7 @@ def edit_address():
                     db.user.update({"_id": get_id}, {"$set": {
                         "add": {"addressType1": AddType, "firstname": name, "email": mail, "add": address, "city": city,
                                 "zip": pincode, "state": state, }}})
-    return jsonify({"message": "address successfully modified "})
+        return jsonify({"message": "address successfully modified "})
 
 
 @app.route('/order_tracker', methods=["GET", "POST"])
@@ -204,63 +204,57 @@ def Order_summary(user):
 
 
 
-@app.route('/paynow', methods=["POST", "GET"])
-def Order_placed():
-    if "email" in session:
-        email = session["email"]
-        data_req = request.get_json()
-        data_session = data_req["email"]
-        products_id = data_req["ProductsId"]
-        get_products_details = db.products.find({"ProductsId": products_id},
-                                                {"_id": 0, "ProductsName": 1, "ProductsPrice": 1,
-                                                 "ProductsDescription": 1, "ProductsId": 1})
+@app.route('/paynow', methods=["GET"])
+@check_auth
+def Order_placed(user):
+        email = user
+        get_products_details = db.cart.find({"email": email},
+                                                {"_id": 0,"email":0})
         item_list = []
 
         for i in get_products_details:
             item_list.append(i)
-        current_datetime = datetime.now()
+        current_datetime = datetime.datetime.now()
+        date=datetime.datetime.utcnow()
         db.orderid.update({"d_id": "1"}, {"$inc": {"OrderId": 1, "InvoiceId": 1}})
         get_data = db.orderid.find({}, {"_id": 0, "OrderId": 1})
-        data_found = "OR"
+        data_found = "ORMKT"
         for j in get_data:
             data_found += str(j["OrderId"])
-        db.orderhistory.update({"email": data_session}, {"$push": {"OrderDetails":
+        db.orderhistory.update({"email": email}, {"$push": {"OrderDetails":
                                                                        {"orderid": data_found,
-                                                                        "TimeOfPlaceTheOrder": current_datetime,
+                                                                        "Name":user,
                                                                         "orderStatus": "placed",
+                                                                        "OrderTime":date,
                                                                         "productsDetails": i}}}, upsert=True)
-        return jsonify(data_found, current_datetime, item_list)
-    else:
-        return jsonify("login please")
+
+        return jsonify(data_found, item_list,current_datetime.strftime("%x"),current_datetime.strftime("%X:%p"))
+
 
 
 @app.route('/myorderhistory', methods=["POST", "GET"])
-def my_order_history():
-    if "email" in session:
-        email = session["email"]
-        req_id = request.get_json()
-        email = req_id["email"]
-        get_data = db.orderhistory.find({"email": email}, {"_id": 0})
+@check_auth
+def my_order_history(user):
+        email = user
+        get_data = db.orderhistory.find({"email": email}, {"_id": 0,"email":0})
         data_return = []
         for i in get_data:
             data_return.append(i)
+            print(data_return)
         return jsonify(data_return)
-    else:
-        return jsonify("login please")
+
 
 
 @app.route('/cancel', methods=['POST', 'GET'])
-def cancel_order():
-    if "email" in session:
-        email = session["email"]
+@check_auth
+def cancel_order(user):
+        email =user
         data = request.get_json()
         data_order_id = data["orderid"]
         db.orderhistory.update(
             {"OrderDetails.orderid": data_order_id, "email": email},
-            {"$set": {"OrderDetails.$.orderStatus": "cancel"}})
-        return jsonify("Order has been cancel")
-    else:
-        return jsonify("please login")
+            {"$set": {"OrderDetails.$.orderStatus": "cancelled"}})
+        return jsonify("Order has been cancel successfully")
 
 
 @app.route('/add/cart', methods=["POST", "GET"])
@@ -268,31 +262,37 @@ def cancel_order():
 def addcart(user):
     email = user
     data = request.get_json()
-    cart = data["ProductsId"]
     count=0
+    cart = data["ProductsId"]
     item_search = db.products.find({"ProductsId": cart}, {"_id": 0})
+    item = db.cart.find({"email":email},{"ItemDetails":{"ProductsId": cart}})
     data_result = []
     for i in item_search:
         data_result.append(i)
-    db.cart.update({"email": email}, {"$push": {"ItemDetails": i}}, upsert=True)
-    return jsonify("item added to cart")
+        db.cart.update({"email": email}, {"$push": {"ItemDetails": i}}, upsert=True)
+    item_count = db.cart.find_one({"email": email}, {"_id": 0, "email": 0})
+    item_list = item_count['ItemDetails']
+    for j in item_count['ItemDetails']:
+        count += 1
+    return jsonify("Item added to cart",200,count)
+
+
+
 
 
 @app.route('/cart', methods=["POST", "GET"])
 @check_auth
 def view_cart(user):
         email = user
-        get_total_price = db.cart.aggregate(
-            [{"$project": {"email": 1, "_id": 0, "totalamount": {"$sum": "$ItemDetails.ProductsPrice"}}}])
-        total_price = []
-        for j in get_total_price:
-            total_price.append(j)
-        item = db.cart.find({"email": email}, {"_id": 0, "email": 0})
-        item_list = []
-        for i in item:
-            item_list.append(i)
-        return jsonify(item_list, total_price)
-
+        count=0
+        item = db.cart.find_one({"email": email}, {"_id": 0, "email": 0})
+        item_list=item['ItemDetails']
+        totalamount =0
+        for row in item['ItemDetails']:
+            totalamount += int(row['ProductsPrice'])
+        for j in item['ItemDetails']:
+            count+=1
+        return jsonify(item_list, totalamount,count)
 
 @app.route('/delete/cart', methods=["POST", "GET"])
 @check_auth
@@ -304,10 +304,9 @@ def remove_cart(user):
     return jsonify( "Item remove from cart")
 
 
-
 @app.route('/search', methods=["POST"])
+@check_auth
 def search_item():
-    if "email" in session:
         data = request.get_json()
         user_req = data["context"]
         item = db.products.find({"ProductsName": {"$regex": user_req, "$options": "$ix"}}, {"_id": 0})
@@ -320,8 +319,7 @@ def search_item():
 
         else:
             return jsonify(item_list)
-    else:
-        return jsonify("login please")
+
 
 
 @app.route('/logout')
